@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Fractal Cosmos — T-Shirt Artwork</title>
+<style>
+  html,body{margin:0;padding:0;background:#000;}
+  .wrap{
+    display:flex;flex-direction:column;align-items:center;gap:18px;
+    padding:28px 16px 40px;background:#000;font-family:'Segoe UI',system-ui,sans-serif;
+  }
+  canvas{
+    width:100%;max-width:460px;height:auto;border-radius:6px;
+    box-shadow:0 0 80px rgba(123,47,247,0.35), 0 0 30px rgba(34,232,255,0.15);
+    display:block;
+    background:#000;
+  }
+  .controls{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;}
+  button{
+    background:linear-gradient(135deg,#7b2ff7,#22e8ff);
+    border:none;color:#05030f;font-weight:600;letter-spacing:.02em;
+    padding:11px 22px;border-radius:999px;cursor:pointer;font-size:14px;
+    box-shadow:0 4px 18px rgba(123,47,247,.4);
+    transition:transform .15s ease, box-shadow .15s ease;
+  }
+  button:hover{transform:translateY(-1px);box-shadow:0 6px 24px rgba(34,232,255,.5);}
+  button:active{transform:translateY(0px);}
+  .status{color:#9a8fc7;font-size:12.5px;letter-spacing:.03em;min-height:16px;text-align:center;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <canvas id="art"></canvas>
+  <div class="controls">
+    <button id="regenBtn">Regenerate Variation</button>
+    <button id="downloadBtn">Download High-Res PNG</button>
+  </div>
+  <div class="status" id="status">Rendering fractal mathematics…</div>
+</div>
+<script>
+(function(){
+  const canvas = document.getElementById('art');
+  const ctx = canvas.getContext('2d');
+  const statusEl = document.getElementById('status');
+
+  const W = 2000, H = 2500;
+  canvas.width = W; canvas.height = H;
+
+  const cx = W/2, cy = H*0.44;
+  const coreR = 430;
+
+  // ---------- seeded RNG ----------
+  function mulberry32(a){
+    return function(){
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      let t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  function lerp(a,b,t){ return a+(b-a)*t; }
+  function mixColor(c1,c2,t){
+    return [Math.round(lerp(c1[0],c2[0],t)),Math.round(lerp(c1[1],c2[1],t)),Math.round(lerp(c1[2],c2[2],t))];
+  }
+
+  // ---------- palette ----------
+  const stops = [
+    [0.00,[8,5,24]],
+    [0.14,[58,18,118]],
+    [0.30,[134,28,188]],
+    [0.48,[255,42,188]],
+    [0.64,[255,120,70]],
+    [0.80,[64,214,255]],
+    [1.00,[232,255,255]]
+  ];
+  function paletteColor(t){
+    t = Math.max(0,Math.min(0.9999,t));
+    for(let i=0;i<stops.length-1;i++){
+      const t0=stops[i][0], c0=stops[i][1], t1=stops[i+1][0], c1=stops[i+1][1];
+      if(t>=t0 && t<=t1){
+        const lt=(t-t0)/(t1-t0);
+        return mixColor(c0,c1,lt);
+      }
+    }
+    return stops[stops.length-1][1];
+  }
+
+  // ---------- real Mandelbrot renderer (smooth escape-time coloring) ----------
+  function renderMandelbrot(size, cxr, cyr, zoom, maxIter, rng){
+    const off = document.createElement('canvas');
+    off.width=size; off.height=size;
+    const octx = off.getContext('2d');
+    const img = octx.createImageData(size,size);
+    const data = img.data;
+    const R = size/2;
+    const jitterX = (rng()-0.5)*0.02;
+    const jitterY = (rng()-0.5)*0.02;
+    for(let py=0; py<size; py++){
+      const dy0 = py-R;
+      for(let px=0; px<size; px++){
+        const dx0 = px-R;
+        const idx=(py*size+px)*4;
+        const dist = Math.sqrt(dx0*dx0+dy0*dy0);
+        if(dist>R){ data[idx+3]=0; continue; }
+        const x0 = cxr+jitterX + (dx0/R)*zoom;
+        const y0 = cyr+jitterY + (dy0/R)*zoom;
+        let x=0,y=0,x2=0,y2=0,iter=0;
+        while(x2+y2<=4 && iter<maxIter){
+          y = 2*x*y+y0;
+          x = x2-y2+x0;
+          x2 = x*x; y2=y*y;
+          iter++;
+        }
+        let r,g,b;
+        if(iter>=maxIter){
+          r=7;g=4;b=18;
+        } else {
+          const logZn = Math.log(x2+y2)/2;
+          const nu = Math.log(logZn/Math.LN2)/Math.LN2;
+          const smooth = (iter+1-nu)/maxIter;
+          const rgb = paletteColor(smooth);
+          r=rgb[0]; g=rgb[1]; b=rgb[2];
+        }
+        data[idx]=r; data[idx+1]=g; data[idx+2]=b;
+        let alpha=255;
+        if(dist>R-36){ alpha = Math.max(0, 255*(1-(dist-(R-36))/36)); }
+        data[idx+3]=alpha;
+      }
+    }
+    octx.putImageData(img,0,0);
+    return off;
+  }
+
+  // ---------- geometry helpers ----------
+  function polygonPath(c,px,py,r,sides,rot){
+    c.beginPath();
+    for(let i=0;i<=sides;i++){
+      const a = rot + i*2*Math.PI/sides;
+      const x = px+r*Math.cos(a), y=py+r*Math.sin(a);
+      if(i===0) c.moveTo(x,y); else c.lineTo(x,y);
+    }
+    c.closePath();
+  }
+
+  function nestedHex(c,px,py,r,depth,colorFn,baseAlpha){
+    if(depth<=0 || r<6) return;
+    const t = depth/5;
+    const rgb = colorFn(1-t);
+    c.strokeStyle = `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${baseAlpha})`;
+    c.lineWidth = Math.max(0.5, depth*0.35);
+    c.shadowColor = `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.9)`;
+    c.shadowBlur = 6;
+    polygonPath(c,px,py,r,6, depth*0.12);
+    c.stroke();
+    nestedHex(c,px,py,r*0.6,depth-1,colorFn,baseAlpha);
+  }
+
+  // ---------- Sierpinski triangle (true recursive subdivision) ----------
+  function sierpinski(c,p1,p2,p3,depth,color,alpha){
+    if(depth<=0){
+      c.beginPath();
+      c.moveTo(p1.x,p1.y); c.lineTo(p2.x,p2.y); c.lineTo(p3.x,p3.y); c.closePath();
+      c.strokeStyle = `rgba(${color[0]},${color[1]},${color[2]},${alpha})`;
+      c.lineWidth=0.7;
+      c.shadowColor = c.strokeStyle;
+      c.shadowBlur=3;
+      c.stroke();
+      return;
+    }
+    const m12={x:(p1.x+p2.x)/2,y:(p1.y+p2.y)/2};
+    const m23={x:(p2.x+p3.x)/2,y:(p2.y+p3.y)/2};
+    const m13={x:(p1.x+p3.x)/2,y:(p1.y+p3.y)/2};
+    sierpinski(c,p1,m12,m13,depth-1,color,alpha);
+    sierpinski(c,m12,p2,m23,depth-1,color,alpha);
+    sierpinski(c,m13,m23,p3,depth-1,color,alpha);
+  }
+  function drawSierpinskiNode(c,px,py,size,depth,color,alpha){
+    const p1={x:px,y:py-size};
+    const p2={x:px-size*0.87,y:py+size*0.5};
+    const p3={x:px+size*0.87,y:py+size*0.5};
+    sierpinski(c,p1,p2,p3,depth,color,alpha);
+  }
+
+  // ---------- recursive fractal tree ----------
+  function branchColor(t){
+    if(t<0.35) return mixColor([90,30,150],[190,40,200],t/0.35);
+    if(t<0.7) return mixColor([190,40,200],[255,90,180],(t-0.35)/0.35);
+    return mixColor([255,90,180],[150,240,255],(t-0.7)/0.3);
+  }
+  function drawBranch(c,x,y,len,angle,depth,maxDepth,rng,counter){
+    if(depth>maxDepth || len<3 || counter.n>480) return;
+    counter.n++;
+    const x2=x+Math.cos(angle)*len, y2=y+Math.sin(angle)*len;
+    const t = depth/maxDepth;
+    const rgb=branchColor(t);
+    c.strokeStyle=`rgba(${rgb[0]},${rgb[1]},${rgb[2]},${0.85-t*0.15})`;
+    c.lineWidth=Math.max(0.6,(maxDepth-depth)*0.85);
+    c.shadowColor=`rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.95)`;
+    c.shadowBlur=3+(maxDepth-depth)*2.2;
+    c.beginPath(); c.moveTo(x,y); c.lineTo(x2,y2); c.stroke();
+    const nBranches = depth===0 ? 3 : (rng()<0.4?3:2);
+    for(let i=0;i<nBranches;i++){
+      const spread=0.32+rng()*0.36;
+      const a2=angle+(i-(nBranches-1)/2)*spread+(rng()-0.5)*0.12;
+      drawBranch(c,x2,y2,len*(0.66+rng()*0.09),a2,depth+1,maxDepth,rng,counter);
+    }
+  }
+
+  // ---------- full composition ----------
+  function draw(seed){
+    statusEl.textContent = 'Rendering fractal mathematics…';
+    const rng = mulberry32(seed);
+
+    // background
+    const bgGrad = ctx.createRadialGradient(cx,cy*0.9,50,cx,H*0.55,H*0.95);
+    bgGrad.addColorStop(0,'#170b38');
+    bgGrad.addColorStop(0.35,'#0e0726');
+    bgGrad.addColorStop(0.7,'#070316');
+    bgGrad.addColorStop(1,'#020108');
+    ctx.fillStyle=bgGrad;
+    ctx.fillRect(0,0,W,H);
+
+    // nebula clouds
+    ctx.globalCompositeOperation='lighter';
+    const nebColors = [[123,47,247],[255,42,188],[34,232,255],[255,120,70]];
+    for(let i=0;i<26;i++){
+      const nx = rng()*W, ny=rng()*H;
+      const nr = 120+rng()*420;
+      const col = nebColors[Math.floor(rng()*nebColors.length)];
+      const g = ctx.createRadialGradient(nx,ny,0,nx,ny,nr);
+      g.addColorStop(0,`rgba(${col[0]},${col[1]},${col[2]},0.10)`);
+      g.addColorStop(1,`rgba(${col[0]},${col[1]},${col[2]},0)`);
+      ctx.fillStyle=g;
+      ctx.fillRect(0,0,W,H);
+    }
+
+    // stars
+    for(let i=0;i<420;i++){
+      const sx=rng()*W, sy=rng()*H;
+      const sr=rng()*1.6+0.3;
+      const b = rng();
+      ctx.beginPath();
+      ctx.fillStyle = `rgba(${Math.round(200+b*55)},${Math.round(210+b*45)},255,${0.35+b*0.55})`;
+      ctx.arc(sx,sy,sr,0,Math.PI*2);
+      ctx.fill();
+    }
+    for(let i=0;i<40;i++){
+      const sx=rng()*W, sy=rng()*H;
+      const sr=1.2+rng()*1.8;
+      ctx.beginPath();
+      ctx.fillStyle='rgba(255,255,255,0.9)';
+      ctx.shadowColor='rgba(180,220,255,0.9)';
+      ctx.shadowBlur=8;
+      ctx.arc(sx,sy,sr,0,Math.PI*2);
+      ctx.fill();
+      ctx.shadowBlur=0;
+    }
+    ctx.globalCompositeOperation='source-over';
+
+    // HUD rings / radial grid
+    ctx.save();
+    ctx.globalCompositeOperation='lighter';
+    ctx.lineWidth=1;
+    for(let r=coreR+40; r<coreR+520; r+=70){
+      ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
+      ctx.strokeStyle='rgba(80,220,255,0.10)';
+      ctx.stroke();
+    }
+    for(let i=0;i<24;i++){
+      const a = i*Math.PI/12;
+      ctx.beginPath();
+      ctx.moveTo(cx+Math.cos(a)*(coreR+30), cy+Math.sin(a)*(coreR+30));
+      ctx.lineTo(cx+Math.cos(a)*(coreR+560), cy+Math.sin(a)*(coreR+560));
+      ctx.strokeStyle='rgba(160,90,255,0.05)';
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // sunburst rays behind core
+    ctx.save();
+    ctx.globalCompositeOperation='lighter';
+    for(let i=0;i<48;i++){
+      const a = i*Math.PI/24 + rng()*0.01;
+      const len = coreR*1.9 + rng()*260;
+      const g = ctx.createLinearGradient(cx,cy,cx+Math.cos(a)*len,cy+Math.sin(a)*len);
+      g.addColorStop(0,'rgba(255,255,255,0.12)');
+      g.addColorStop(0.4,'rgba(150,90,255,0.05)');
+      g.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.strokeStyle=g;
+      ctx.lineWidth=1.4;
+      ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx+Math.cos(a)*len,cy+Math.sin(a)*len); ctx.stroke();
+    }
+    ctx.restore();
+
+    // ---- everything below drawn additively for neon glow ----
+    ctx.globalCompositeOperation='lighter';
+
+    // radial fractal trees
+    const armCount=8;
+    for(let k=0;k<armCount;k++){
+      const baseAngle = -Math.PI/2 + k*(2*Math.PI/armCount);
+      const sx = cx+Math.cos(baseAngle)*(coreR-10);
+      const sy = cy+Math.sin(baseAngle)*(coreR-10);
+      const counter={n:0};
+      drawBranch(ctx, sx, sy, 92, baseAngle, 0, 9, rng, counter);
+    }
+
+    // nested hexagon fractal ring
+    const hexCount=8;
+    for(let k=0;k<hexCount;k++){
+      const a = k*(2*Math.PI/hexCount) + Math.PI/hexCount;
+      const hx = cx+Math.cos(a)*(coreR+230);
+      const hy = cy+Math.sin(a)*(coreR+230);
+      nestedHex(ctx,hx,hy,58,5,paletteColor,0.55);
+    }
+
+    // logarithmic spiral arms with recursive fractal nodes
+    const spiralArms=3;
+    for(let s=0;s<spiralArms;s++){
+      const phase = s*(2*Math.PI/spiralArms);
+      const b0=0.17;
+      let prevX=null, prevY=null;
+      let nodeCounter=0;
+      for(let th=0; th<5.6; th+=0.045){
+        const r = (coreR+60)*Math.exp(b0*th);
+        if(r> H*0.62) break;
+        const ang = th+phase;
+        const x = cx+r*Math.cos(ang);
+        const y = cy+r*Math.sin(ang)*0.92;
+        const tt = Math.min(1, r/(H*0.55));
+        const rgb = mixColor([150,60,220],[70,220,255], tt);
+        if(prevX!==null){
+          ctx.strokeStyle=`rgba(${rgb[0]},${rgb[1]},${rgb[2]},${0.5*(1-tt*0.6)})`;
+          ctx.lineWidth=1.6*(1-tt*0.5);
+          ctx.shadowColor=`rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.6)`;
+          ctx.shadowBlur=4;
+          ctx.beginPath(); ctx.moveTo(prevX,prevY); ctx.lineTo(x,y); ctx.stroke();
+        }
+        nodeCounter++;
+        if(nodeCounter%7===0){
+          const nodeSize = Math.max(3, 22*(1-tt)+3);
+          if(rng()<0.7){
+            drawSierpinskiNode(ctx,x,y,nodeSize,3,rgb,0.55);
+          } else {
+            ctx.save();
+            ctx.strokeStyle=`rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.6)`;
+            ctx.shadowColor=ctx.strokeStyle; ctx.shadowBlur=5;
+            ctx.lineWidth=0.8;
+            polygonPath(ctx,x,y,nodeSize*0.6,6,rng()*Math.PI);
+            ctx.stroke();
+            ctx.restore();
+          }
+        }
+        prevX=x; prevY=y;
+      }
+    }
+
+    // scattered small fractal accents (close-up recursive detail)
+    for(let i=0;i<16;i++){
+      const ax=rng()*W, ay=rng()*H;
+      const d = Math.hypot(ax-cx,ay-cy);
+      if(d<coreR+150) continue;
+      const size=8+rng()*22;
+      const col = paletteColor(rng());
+      if(rng()<0.5){
+        drawSierpinskiNode(ctx,ax,ay,size,2+Math.floor(rng()*2),col,0.35);
+      } else {
+        ctx.save();
+        ctx.strokeStyle=`rgba(${col[0]},${col[1]},${col[2]},0.35)`;
+        ctx.shadowColor=ctx.strokeStyle; ctx.shadowBlur=4;
+        ctx.lineWidth=0.7;
+        polygonPath(ctx,ax,ay,size*0.7,6,rng()*Math.PI);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    ctx.globalCompositeOperation='source-over';
+
+    // central Mandelbrot core (real escape-time fractal, "seahorse valley" region)
+    const mbCenterX = -0.745 + (rng()-0.5)*0.01;
+    const mbCenterY = 0.113 + (rng()-0.5)*0.01;
+    const mbZoom = 0.018 + rng()*0.006;
+    const coreCanvas = renderMandelbrot(Math.round(coreR*2), mbCenterX, mbCenterY, mbZoom, 190, rng);
+    ctx.save();
+    ctx.shadowColor='rgba(180,80,255,0.55)';
+    ctx.shadowBlur=60;
+    ctx.drawImage(coreCanvas, cx-coreR, cy-coreR);
+    ctx.restore();
+
+    // glow ring borders around the core
+    ctx.save();
+    ctx.globalCompositeOperation='lighter';
+    const ringColors=[[255,255,255,0.65,2],[80,220,255,0.4,6],[150,60,255,0.3,16]];
+    ringColors.forEach(function(rc){
+      ctx.beginPath();
+      ctx.arc(cx,cy,coreR,0,Math.PI*2);
+      ctx.strokeStyle=`rgba(${rc[0]},${rc[1]},${rc[2]},${rc[3]})`;
+      ctx.lineWidth=2.4;
+      ctx.shadowColor=`rgba(${rc[0]},${rc[1]},${rc[2]},0.8)`;
+      ctx.shadowBlur=rc[4];
+      ctx.stroke();
+    });
+    ctx.restore();
+
+    // outer framing rings (large scale symmetry)
+    ctx.save();
+    ctx.globalCompositeOperation='lighter';
+    ctx.beginPath(); ctx.arc(cx,cy,coreR+560,0,Math.PI*2);
+    ctx.strokeStyle='rgba(150,90,255,0.14)'; ctx.lineWidth=1.2; ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx,cy,coreR+600,0,Math.PI*2);
+    ctx.strokeStyle='rgba(60,220,255,0.10)'; ctx.lineWidth=1; ctx.stroke();
+    for(let i=0;i<36;i++){
+      const a=i*Math.PI/18;
+      const r1=coreR+560;
+      const tickLen = i%3===0? 22:10;
+      ctx.beginPath();
+      ctx.moveTo(cx+Math.cos(a)*r1, cy+Math.sin(a)*r1);
+      ctx.lineTo(cx+Math.cos(a)*(r1-tickLen), cy+Math.sin(a)*(r1-tickLen));
+      ctx.strokeStyle='rgba(120,220,255,0.18)';
+      ctx.lineWidth=1;
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // vignette
+    const vg = ctx.createRadialGradient(cx,H*0.5,H*0.25,cx,H*0.5,H*0.78);
+    vg.addColorStop(0,'rgba(0,0,0,0)');
+    vg.addColorStop(1,'rgba(0,0,0,0.55)');
+    ctx.fillStyle=vg;
+    ctx.fillRect(0,0,W,H);
+
+    // subtle scanlines for a digital/tech texture
+    ctx.save();
+    ctx.globalAlpha=0.03;
+    ctx.fillStyle='#000';
+    for(let y=0;y<H;y+=3){ ctx.fillRect(0,y,W,1); }
+    ctx.restore();
+
+    ctx.shadowBlur=0;
+    statusEl.textContent='Ready — click Download for the full-resolution PNG.';
+  }
+
+  let seed = 1337;
+  function run(){
+    statusEl.textContent='Rendering fractal mathematics… (a few seconds)';
+    setTimeout(function(){ draw(seed); }, 30);
+  }
+  run();
+
+  document.getElementById('regenBtn').addEventListener('click', function(){
+    seed = Math.floor(Math.random()*1e9);
+    run();
+  });
+  document.getElementById('downloadBtn').addEventListener('click', function(){
+    const link=document.createElement('a');
+    link.download='fractal-cosmos-tshirt-design.png';
+    link.href=canvas.toDataURL('image/png');
+    link.click();
+  });
+})();
+</script>
+</body>
+</html>
