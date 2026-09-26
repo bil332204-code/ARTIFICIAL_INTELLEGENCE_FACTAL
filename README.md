@@ -1,50 +1,112 @@
- HEAD
-# Fractal Cosmos — T-Shirt Artwork Generator
+# Fractal Cosmos
 
-A single-page, browser-based generative art tool that renders an original, cyberpunk-styled fractal composition using genuine recursive fractal mathematics — not a pre-made texture. Every structure in the piece (the Mandelbrot core, the trees, the hexagon rings, the spiral-seeded triangles) is computed live on an HTML5 Canvas, so zooming into any region reveals further self-similar structure rather than noise. Output is a print-ready, portrait 2000×2500px PNG designed for the front of a T-shirt.
+**Interactive Generative Fractal Art in Vanilla JavaScript**
 
-## Description
+Fractal Cosmos is a browser-based generative art project that combines multiple mathematical fractals into a single interactive composition. The artwork is rendered live with the HTML5 Canvas API and can be regenerated with a new seed or exported as a high-resolution PNG.
 
-The composition places a real escape-time Mandelbrot set at the center, framed by a glowing ring, and surrounds it with recursive fractal trees, nested hexagon fractals, and logarithmic spiral arms seeded with recursive Sierpinski triangles — all rendered over a layered deep-space background of nebula glow, a starfield, and HUD-style orbital rings. A seeded pseudo-random generator drives every layer, so each "variation" is a fresh, reproducible instance of the same underlying algorithms rather than a random image.
+This project was created for an Artificial Intelligence course activity at NUST SEECS and focuses on recursive design, procedural generation, and mathematical visualization.
 
-## Fractal Types Implemented
+## Highlights
 
-- **Mandelbrot Set** — escape-time algorithm (`renderMandelbrot`) with smooth/continuous coloring (using the standard `log(log|z|)` normalized iteration count) instead of hard color bands, masked into a circular medallion with a soft alpha-fade edge and rendered through a custom 7-stop color palette (deep violet → magenta → orange → cyan → white).
-- **Recursive Fractal Trees** — `drawBranch()` is a true recursive branching function: each call draws a segment, then spawns 2–3 child branches at randomized spread angles and shrinking length (~66–75% per level), with color and glow shifting by recursion depth. Eight of these trees are arranged in 8-fold rotational symmetry around the core.
-- **Nested Hexagon Fractal** — `nestedHex()` recursively draws a hexagon, then calls itself again at 60% of the radius with a rotation offset, producing a self-similar shrinking ring pattern; repeated in clusters around the core.
-- **Sierpinski Triangles** — `sierpinski()` is a classic recursive triangular subdivision (splitting each triangle into 3 corner sub-triangles at the edge midpoints), seeded at multiple points and scales via `drawSierpinskiNode()`.
-- **Logarithmic Spiral Arms** — 3 spiral arms sweep outward from the core, with Sierpinski-triangle nodes placed along each arm at progressively shrinking scale as the spiral radius grows.
+- Real **Mandelbrot set** rendering using the escape-time algorithm with smooth coloring
+- Recursive **fractal trees** with depth-based branching and variation
+- Recursive **Sierpinski triangles**
+- Nested **hexagon fractals**
+- **Logarithmic spiral** layouts seeded with recursive geometry
+- Seeded pseudo-random generation for reproducible variations
+- Interactive **Regenerate Variation** control
+- High-resolution **2000 × 2500 PNG export**
+- No external libraries or build tools
 
-All randomization (nebula/star layout, tree branch angles, Mandelbrot zoom jitter) is driven by a single seeded PRNG (`mulberry32`), so a given seed always reproduces the same artwork.
+## How It Works
 
-## Tools, Languages & Libraries
+The composition is generated entirely in JavaScript on an HTML5 canvas.
 
-- **Language:** JavaScript (vanilla, ES5/ES6)
-- **Rendering:** HTML5 Canvas 2D API (including an offscreen canvas for the Mandelbrot layer)
-- **Libraries/Frameworks:** None — no external dependencies, no build step
-- **Structure:** Single self-contained `.html` file (markup, CSS, and script all inline)
+### Mandelbrot Core
 
-## Setup & Run Instructions
+The central artwork uses an escape-time Mandelbrot renderer. Each pixel is iterated in the complex plane until it either escapes or reaches the iteration limit. Smooth coloring is applied using a normalized iteration value instead of hard color bands.
 
-1. Download/clone the file:
-   ```bash
-   git clone <https://github.com/bil332204-code/ARTIFICIAL_INTELLEGENCE_FACTAL.git>
-   cd <AI>
-   ```
-2. Open `code.html` directly in any modern browser (Chrome, Edge, Firefox) — no server, install, or build step required.
-3. The fractal renders automatically on load.
-   - **Regenerate Variation** — picks a new random seed and re-renders the nebula/star layout, tree branching, and Mandelbrot zoom point.
-   - **Download High-Res PNG** — exports the full 2000×2500 canvas as `fractal-cosmos-tshirt-design.png`.
+### Recursive Fractal Trees
 
-## Screenshot
+Each branch recursively generates smaller child branches with controlled angle and length variation. Multiple trees are arranged radially around the Mandelbrot core.
 
-![Fractal Cosmos Output](./fractal-cosmos-tshirt-design.png)
+### Sierpinski Triangles
 
-## Student Information
+Triangles are recursively subdivided into three corner triangles using edge midpoints, producing classic self-similar Sierpinski geometry.
 
-- **Name:** Bilal
-- **Registration Number:**  573512
-- **Institution:** NUST SEECS (National University of Sciences and Technology, School of Electrical Engineering and Computer Science)
-- **Course:** ARTIFICIAL INTELLIGENCE
-=======
+### Nested Hexagons
 
+Hexagons recursively shrink and rotate, creating layered geometric structures around the central artwork.
+
+### Spiral Composition
+
+Three logarithmic spiral arms organize smaller recursive fractal elements around the center and help connect the different visual structures into one composition.
+
+## Tech Stack
+
+- **JavaScript**
+- **HTML5 Canvas 2D API**
+- **HTML / CSS**
+- No frameworks
+- No external dependencies
+
+## Run Locally
+
+Clone the repository:
+
+```bash
+git clone https://github.com/bil332204-code/ARTIFICIAL_INTELLEGENCE_FACTAL.git
+cd ARTIFICIAL_INTELLEGENCE_FACTAL
+```
+
+Then open:
+
+```text
+index.html
+```
+
+in any modern browser.
+
+No installation, package manager, or local server is required.
+
+## Controls
+
+**Regenerate Variation** generates another composition using a different random seed.
+
+**Download High-Res PNG** exports the current artwork as a 2000 × 2500 PNG suitable for presentation or design use.
+
+## Project Structure
+
+```text
+.
+├── index.html
+├── README.md
+└── .gitignore
+```
+
+The full application is intentionally self-contained in `index.html`.
+
+## Concepts Demonstrated
+
+- Recursion
+- Fractal mathematics
+- Procedural generation
+- Complex-number iteration
+- Seeded pseudo-random generation
+- Canvas-based rendering
+- Interactive browser programming
+- High-resolution image export
+
+## Possible Improvements
+
+- Add user-controlled Mandelbrot zoom and pan
+- Allow direct seed input for reproducible artwork
+- Add controls for recursion depth and color palette
+- Split rendering logic into reusable JavaScript modules
+- Publish the project with GitHub Pages
+
+---
+
+**Project:** Fractal Cosmos  
+**Institution:** NUST SEECS  
+**Course Context:** Artificial Intelligence
