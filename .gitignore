@@ -1,0 +1,11 @@
+# Generated exports
+fractal-cosmos-tshirt-design.png
+
+# Local demo recordings
+*.mp4
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
